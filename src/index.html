@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WindSpeed</title>
+</head>
+<body>
+
+  <main>
+    <section id="geoloc-current">
+      <div>
+        <span id="geoloc-current-lat"></span>,<span id="geoloc-current-lon"></span>
+      </div>
+      <div>
+        Heading <span id="geoloc-current-heading"></span> at <span id="geoloc-current-speed"></span>
+      </div>
+    </section>
+  
+    <details>
+      <summary>Position History</summary>
+      <ul id="geoloc-history"></ul>
+    </details>
+  </main>
+
+  <script>
+
+    const ui_geolocCurrent = document.getElementById("geoloc-current");
+    const ui_geolocCurrentLat = document.getElementById("geoloc-current-lat");
+    const ui_geolocCurrentLon = document.getElementById("geoloc-current-lon");
+    const ui_geolocCurrentHeading = document.getElementById("geoloc-current-heading");
+    const ui_geolocCurrentSpeed = document.getElementById("geoloc-current-speed");
+    const ui_geolocHistory = document.getElementById("geoloc-history");
+
+    const error = watchable(null);
+    const watchId = watchable();
+
+    const positionHistory = watchable([]);
+
+    function updateGeolocCurrent({
+      lat: latitude,
+      lon: longetude,
+      hdg: heading,
+      spd: speed,
+      ts: timestamp,
+    } = {}) {
+      ui_geolocCurrentLat.textContent = latitude;
+      ui_geolocCurrentLon.textContent = longetude;
+      ui_geolocCurrentSpeed.textContent = speed;
+      ui_geolocCurrentHeading.textContent = heading;
+    }
+
+    function updateGeolocHistory(data) {
+      empty(ui_geolocHistory);
+
+      data.forEach(({
+        lat: latitude,
+        lon: longetude,
+        hdg: heading,
+        spd: speed,
+        ts: timestamp,
+      } = {}) => {
+        const li = document.createElement("li");
+        li.textContent = `${new Date(timestamp).toLocaleString()}: Heading ${heading} at ${speed}`;
+        ui_geolocHistory.appendChild(li);
+      });
+    }
+
+    positionHistory.watch((data) => {
+      updateGeolocCurrent(data[0]);
+      updateGeolocHistory(data.slice(1));
+    });
+
+    trackPosition();
+
+    function trackPosition() {
+      if (!navigator.geolocation) {
+        error.value = "Geolocation is not supported by your browser";
+        return;
+      }
+
+      watchId.value = navigator.geolocation.watchPosition(
+        (position) => {
+          const { coords, timestamp } = position;
+
+          positionHistory.value = [
+            {
+              lat: coords.latitude,
+              lon: coords.longitude,
+              hdg: coords.heading,
+              spd: coords.speed,
+              ts: timestamp,
+            },
+            ...positionHistory.value,
+          ];
+
+          if (error.value !== null) {
+            error.value = null;
+          }
+        },
+        (err) => {
+          error.value = `Error: ${err.message}`;
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0,
+        },
+      );
+    }
+
+    function watchable(initialValue) {
+      let _value = initialValue;
+
+      const result = { watch, unwatch };
+
+      const watchers = [];
+
+      function notify() {
+        watchers.forEach(watcher => watcher(result.value))
+      }
+
+      function watch(watcher) {
+        watcher(result.value);
+        watchers.push(watcher);
+      }
+
+      function unwatch(watcher) {
+        watchers.splice(watchers.indexOf(watcher), 1);
+      }
+
+      Object.defineProperties(result, {
+        value: {
+          get() {
+            return _value;
+          },
+          set(value) {
+            _value = value;
+            notify();
+          }
+        }
+      })
+
+      return result;
+    }
+
+    // Don't think I actually need this...
+    function readonly(initialValue) {
+      Object.freeze(initialValue);
+
+      let _value = initialValue;
+
+      const data = {}
+
+      Object.defineProperties(data, {
+        value: {
+          get() {
+            return _value;
+          },
+        }
+      });
+
+      return data;
+    }
+
+    function empty(domNode) {
+      while (domNode.lastChild) {
+        domNode.removeChild(domNode.lastChild);
+      }
+    }
+  </script>
+</body>
+</html>
