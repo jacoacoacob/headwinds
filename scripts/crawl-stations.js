@@ -26,7 +26,7 @@
 import path from "node:path";
 import fs from "node:fs";
 
-const DATA_DIR = path.resolve(import.meta.dirname, process.env.DATA_DIR || "../data");
+import { DATA_DIR} from "./constants.js"
 
 /**
  * Used to compute a random duration, in milliseconds, to wait between /stations calls

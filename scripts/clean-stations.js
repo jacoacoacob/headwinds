@@ -1,7 +1,7 @@
-import path from "node:path"
-import fs from "node:fs"
+import fs from "node:fs";
+import path from "node:path";
 
-const DATA_DIR = path.resolve(import.meta.dirname, process.env.DATA_DIR || "../data");
+import { DATA_DIR} from "./constants.js";
 
 function run() {
   const pathsToDelete = [];
@@ -13,9 +13,9 @@ function run() {
       encoding: "utf-8"
     });
 
-    const data = JSON.parse(file);
+    const json = JSON.parse(file);
 
-    if (data.features.length === 0) {
+    if (json.features.length === 0) {
       pathsToDelete.push(filepath);
     }
   }
