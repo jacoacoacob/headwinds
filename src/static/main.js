@@ -1,6 +1,7 @@
 import { watchable, trackPosition, empty } from "./lib.js";
 
 const ui_geolocCurrent = document.getElementById("geoloc-current");
+const ui_geolocCurrentClosestStations = document.getElementById("geoloc-current-closest-stations");
 const ui_geolocCurrentLat = document.getElementById("geoloc-current-lat");
 const ui_geolocCurrentLon = document.getElementById("geoloc-current-lon");
 const ui_geolocCurrentHeading = document.getElementById("geoloc-current-heading");
@@ -30,10 +31,11 @@ function updateGeolocCurrent({
   spd: speed,
   ts: timestamp,
 } = {}) {
-  ui_geolocCurrentLat.textContent = latitude;
   ui_geolocCurrentLon.textContent = longetude;
+  ui_geolocCurrentLat.textContent = latitude;
   ui_geolocCurrentSpeed.textContent = speed;
   ui_geolocCurrentHeading.textContent = heading;
+  ui_geolocCurrentClosestStations.href = `/forecast/stations/${longetude},${latitude}`;
 }
 
 function updateGeolocHistory(data) {
