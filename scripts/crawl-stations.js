@@ -26,27 +26,12 @@
 import path from "node:path";
 import fs from "node:fs";
 
-import { DATA_DIR} from "./constants.js"
+import { DATA_DIR, getEnvNumber, sleep } from "./utils.js"
 
 /**
  * Used to compute a random duration, in milliseconds, to wait between /stations calls
  */
-const SLEEP_INTERVAL = getNumberEnv(process.env.SLEEP_INTERVAL, 5000);
-
-
-function getNumberEnv(value, defaultValue = 2000) {
-  const parsed = Number.parseInt(value, 10);
-  
-  if (Number.isNaN(parsed)) {
-    return defaultValue;
-  }
-
-  return parsed;
-}
-
-function sleep(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
+const SLEEP_INTERVAL = getEnvNumber(process.env.SLEEP_INTERVAL, 5000);
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR)

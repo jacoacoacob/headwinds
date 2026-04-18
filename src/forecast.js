@@ -1,81 +1,12 @@
-import fs from "node:fs";
-import path from "node:path";
-
 import express from "express";
 
-import { DATA_DIR } from "../scripts/constants.js";
-
-function getStationDetailModel() {
-  /** @type {Map<string, GeoJSON} */
-  const model = new Map();
-
-  for (let filename of fs.readdirSync(DATA_DIR)) {
-
-    if (!filename.startsWith("stations?")) {
-      continue;
-    }
-
-    const keyBase = filename.slice(
-      filename.indexOf("cursor=") + 7,
-      filename.length - 5
-    );
-
-    const filepath = path.join(DATA_DIR, filename);
-
-    const file = fs.readFileSync(filepath, {
-      encoding: "utf-8"
-    });
-
-    const json = JSON.parse(file);
-
-    for (let i = 0; i < json.features.length; i++) {
-      const feature = json.features[i];
-
-      const key = keyBase + feature.properties.stationIdentifier;
-
-      model.set(key, feature);
-    }
-  }
-
-  return model;
-}
-
-function getStationIdLookupModel() {
-  const data = JSON.parse(
-    fs.readFileSync(
-      path.join(DATA_DIR, "station.index.json")
-    )
-  );
-
-  /** @type {Map<string, string[][]} */
-  const model = new Map();
-
-  for (let i = 0; i < data.length; i++) {
-    const entry = data[i];
-    const [_source, _stationId, lon, lat] = entry;
-
-    const longitudeKey = lon < 0 ? Math.ceil(lon) : Math.floor(lon);
-    const latitudeKey = lat < 0 ? Math.ceil(lat) : Math.floor(lat);
-
-    const key = `${longitudeKey}_${latitudeKey}`;
-
-    if (model.has(key)) {
-      model.get(key).push(entry);
-    } else {
-      model.set(key, [entry]);
-    }
-  }
-
-  return model;
-}
-
-const stationDetailModel = getStationDetailModel();
-const stationIdLookupModel = getStationIdLookupModel();
+import { fetchForecastZoneObservations, findClosetStations, hasWindObservations } from "./services.js";
+import { zoneObservationsCache } from "./models.js";
 
 const forecast = express.Router();
 
-forecast.get("/stations/:lonLat", (req, res) => {
-  const [lon, lat] = req.params.lonLat.split(",");
+forecast.get("/observations/:latLon", async (req, res) => {
+  const [lat, lon] = req.params.latLon.split(",").map((part) => part.trim());
 
   let limit = Number.parseInt(req.query.limit, 10);
 
@@ -83,45 +14,44 @@ forecast.get("/stations/:lonLat", (req, res) => {
     limit = 5;
   }
 
-  const longitudeKey = lon.replace(/\..*/g, "");
-  const latitudeKey = lat.replace(/\..*/g, "");
+  const { error: closestStationsError, data: closestStations } = findClosetStations(
+    lat,
+    lon,
+    limit,
+  );
 
-  const key = `${longitudeKey}_${latitudeKey}`;
+  if (closestStationsError) {
+    return res
+      .status(closestStationsError.code)
+      .json(closestStationsError);
+  }
 
-  const narrowed = stationIdLookupModel.get(key);
+  const result = await fetchForecastZoneObservations(closestStations);
 
-  const longitude = Number.parseFloat(lon);
-  const latitude = Number.parseFloat(lat);
+  return res.json(result);
+});
 
-  narrowed.sort((a, b) => {
-    const lonA = a[2];
-    const latA = a[3];
+forecast.get("/stations/:latLon", (req, res) => {
+  const [lat, lon] = req.params.latLon.split(",").map((part) => part.trim());
 
-    const distLonA = longitude - lonA;
-    const distLatA = latitude - latA;
+  let limit = Number.parseInt(req.query.limit, 10);
 
-    const distA = Math.sqrt(distLonA**2 + distLatA**2);
+  if (Number.isNaN(limit) || limit < 0) {
+    limit = 5;
+  }
 
-    const lonB = b[2];
-    const latB = b[3];
+  const { error, data: stations } = findClosetStations(
+    lat, 
+    lon,
+    limit,
+    req.query.units
+  );
 
-    const distLonB = longitude - lonB;
-    const distLatB = latitude - latB;
+  if (error) {
+    return res.status(error.code).json(error);
+  }
 
-    const distB = Math.sqrt(distLonB**2 + distLatB**2);
-
-    return distA - distB;
-  });
-
-  const stations = narrowed
-    .slice(0, limit)
-    .map(([source, stationId], i) => {
-      const detail = stationDetailModel.get(source + stationId);
-      detail.properties.order = i;
-      return detail;
-    });
-
-  res.json({
+  return res.json({
     type: "FeatureCollection",
     features: [
       {
@@ -140,7 +70,6 @@ forecast.get("/stations/:lonLat", (req, res) => {
       ...stations
     ]
   });
-
 });
 
 export { forecast }
