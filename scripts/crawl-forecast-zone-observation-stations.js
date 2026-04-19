@@ -1,8 +1,6 @@
 import path from "node:path";
 import fs, { stat } from "node:fs";
 
-import { DATA_DIR, getEnvNumber, sleep } from "./utils.js"
-
 /**
  * Used to compute a random duration, in milliseconds, to wait between /stations calls
  */
@@ -11,6 +9,25 @@ const SLEEP_INTERVAL = getEnvNumber(process.env.SLEEP_INTERVAL, 5000);
 
 function log(message) {
   console.log(new Date().toISOString() + " " + message);
+}
+
+const DATA_DIR = path.resolve(
+  import.meta.dirname,
+  process.env.DATA_DIR || "../data"
+);
+
+function getEnvNumber(value, defaultValue = 2000) {
+  const parsed = Number.parseInt(value, 10);
+  
+  if (Number.isNaN(parsed)) {
+    return defaultValue;
+  }
+
+  return parsed;
+}
+
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 async function run() {
