@@ -1,7 +1,7 @@
 import fs, { stat } from "node:fs";
 import path from "node:path";
 
-import { DATA_DIR } from "../scripts/utils.js";
+import { DATA_DIR } from "./constants.js";
 
 export const stationDetailModel = _createObservationStationModel();
 export const stationIdLookupModel = _createStationIdLookupModel();

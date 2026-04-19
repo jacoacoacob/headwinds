@@ -7,7 +7,22 @@ import { VALID_DISTANCE_UNITS } from "./constants.js";
 const forecast = express.Router();
 
 forecast.get("/observations/cache", (req, res) => {
-  res.json(Array.from(observationsCache.entries()));
+  const now = Date.now();
+
+  const result = Object.fromEntries(
+    Array.from(observationsCache.entries()).map(
+      ([key, entry]) => [
+        key,
+        {
+          status: entry.ttl > now ? "fresh" : "stale",
+          ttl: new Date(entry.ttl).toISOString(),
+          value: entry.value,
+        }
+      ]
+    )
+  );
+  
+  res.json(result);
 });
 
 forecast.get("/observations/:latLon", async (req, res) => {

@@ -6,15 +6,9 @@ import fs, { stat } from "node:fs";
  */
 const SLEEP_INTERVAL = getEnvNumber(process.env.SLEEP_INTERVAL, 5000);
 
-
 function log(message) {
   console.log(new Date().toISOString() + " " + message);
 }
-
-const DATA_DIR = path.resolve(
-  import.meta.dirname,
-  process.env.DATA_DIR || "../data"
-);
 
 function getEnvNumber(value, defaultValue = 2000) {
   const parsed = Number.parseInt(value, 10);

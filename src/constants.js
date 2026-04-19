@@ -1,3 +1,10 @@
+import fs from "node:fs";
+import path from "node:path";
+
+export const DATA_DIR = path.resolve(
+  import.meta.dirname,
+  process.env.DATA_DIR || "../data"
+);
 
 export const DEGREES_DISTANCE_COEFFICIENTS = {
   MILES: 69.4,
