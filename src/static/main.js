@@ -6,11 +6,16 @@ const ui_geolocCurrentLat = document.getElementById("geoloc-current-lat");
 const ui_geolocCurrentLon = document.getElementById("geoloc-current-lon");
 const ui_geolocCurrentHeading = document.getElementById("geoloc-current-heading");
 const ui_geolocCurrentSpeed = document.getElementById("geoloc-current-speed");
+
 const ui_geolocHistory = document.getElementById("geoloc-history");
 
-const error = watchable(null);
-const watchId = watchable();
+const ui_observationsSummary = document.getElementById("observations-summary");
+const ui_observationsData = document.getElementById("observations-data");
 
+const observations = watchable({});
+const error = watchable(null);
+
+const watchId = watchable();
 const positionHistory = watchable([]);
 
 trackPosition({
@@ -19,12 +24,55 @@ trackPosition({
   positionHistory,
 });
 
+const _called = new Set();
+
+function once(fn, ...args) {
+  if (_called.has(fn)) {
+    return;
+  }
+  _called.add(fn, true);
+  return fn(...args);
+}
+
+async function fetchObservations(lat, lon) {
+  const response = await fetch(`/forecast/observations/${lat},${lon}?units=mi`);
+  const json = await response.json();
+
+  console.log(json);
+
+  observations.value = json;
+}
+
+setInterval(async () => {
+  const currentPosition = positionHistory.value[0];
+
+  if (currentPosition) {
+    fetchObservations(currentPosition.lat, currentPosition.lon);
+  }
+}, 10_000);
+
 positionHistory.watch((data) => {
-  updateGeolocCurrent(data[0]);
-  updateGeolocHistory(data.slice(1));
+  const currentPosition = data[0];
+  once(async () => {
+    await fetchObservations(currentPosition.lat, currentPosition.lon)
+  })
+}, { lazy: true })
+
+positionHistory.watch((data) => {
+  ui_updateGeolocCurrent(data[0]);
+  ui_updateGeolocHistory(data.slice(1));
 });
 
-function updateGeolocCurrent({
+observations.watch(ui_updateObservations);
+
+function ui_updateObservations({ status, data, error, context }) {
+  if (data) {
+    ui_observationsSummary.textContent = `Observations for ${data.properties.stationName}`;
+    ui_observationsData.textContent = JSON.stringify({ status, error, context, data }, null, 2);
+  }
+}
+
+function ui_updateGeolocCurrent({
   lat: latitude,
   lon: longetude,
   hdg: heading,
@@ -38,7 +86,7 @@ function updateGeolocCurrent({
   ui_geolocCurrentClosestStations.href = `/forecast/stations/${longetude},${latitude}`;
 }
 
-function updateGeolocHistory(data) {
+function ui_updateGeolocHistory(data) {
   empty(ui_geolocHistory);
 
   data.forEach(({

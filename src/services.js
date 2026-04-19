@@ -1,5 +1,5 @@
 import { DISTANCE_UNITS, DEGREES_DISTANCE_COEFFICIENTS, SECONDS } from "./constants.js";
-import { stationDetailModel, stationIdLookupModel, zoneObservationsCache } from "./models.js";
+import { stationDetailModel, stationIdLookupModel, observationsCache } from "./models.js";
 
 
 function calculateDistanceInDegrees(latX, lonX, latY, lonY) {
@@ -10,17 +10,16 @@ function calculateDistanceInDegrees(latX, lonX, latY, lonY) {
 }
 
 function convertDistanceInDegrees(distance, toUnits) {
-  let convertedDistance, suffix;
+  let convertedDistance;
 
   switch (toUnits) {
     case DISTANCE_UNITS.MILES: {
       convertedDistance = distance * DEGREES_DISTANCE_COEFFICIENTS.MILES;
-      suffix = DISTANCE_UNITS.MILES;
+
       break;
     }
     case DISTANCE_UNITS.KILOMETERS: {
       convertedDistance = distance * DEGREES_DISTANCE_COEFFICIENTS.KILOMETERS;
-      suffix = DISTANCE_UNITS.KILOMETERS;
       break;
     }
     default: {
@@ -28,9 +27,7 @@ function convertDistanceInDegrees(distance, toUnits) {
     }
   }
 
-  const roundedDistance = Math.round(convertedDistance * 100) / 100;
-
-  return roundedDistance + suffix;
+  return Math.round(convertedDistance * 100) / 100;
 }
 
 export function findClosetStations(
@@ -39,12 +36,10 @@ export function findClosetStations(
   limit,
   units
 ) {
-  const latitudeKey = latitude.replace(/\..*/g, "");
-  const longitudeKey = longitude.replace(/\..*/g, "");
 
-  const key = `${latitudeKey}_${longitudeKey}`;
+  const stationIDs = stationIdLookupModel.getStationIDs(latitude, longitude);
 
-  if (!stationIdLookupModel.has(key)) {
+  if (!stationIDs) {
     return {
       error: {
         code: 404,
@@ -54,14 +49,19 @@ export function findClosetStations(
     }
   }
 
-  const stations = Array.from(stationIdLookupModel.get(key))
+  /**
+   * @type {import("./models.js").ObservationStationGeoJSON[]}
+   */
+  const stations = stationIDs
+    .map((stationId) => stationDetailModel.get(stationId))
+    .filter(Boolean);
 
   const lat = Number.parseFloat(latitude);
   const lon = Number.parseFloat(longitude);
 
   stations.sort((a, b) => {
-    const lonA = a[2];
-    const latA = a[3];
+    const lonA = a.geometry.coordinates[0];
+    const latA = a.geometry.coordinates[1];
 
     const distA = calculateDistanceInDegrees(
       lat,
@@ -70,8 +70,8 @@ export function findClosetStations(
       lonA
     );
 
-    const lonB = b[2];
-    const latB = b[3];
+    const lonB = b.geometry.coordinates[0];
+    const latB = b.geometry.coordinates[1];
 
     const distB = calculateDistanceInDegrees(
       lat,
@@ -83,16 +83,20 @@ export function findClosetStations(
     return distA - distB;
   });
 
+  /**
+   * @type {import("./models.js").ObservationStationExtendedGeoJSON[]}
+   */
   const result = [];
 
   for (let i = 0; i < limit; i++) {
-    const source = stations[i][0];
-    const stationId = stations[i][1];
-    
-    const stationDetail = stationDetailModel.get(source + stationId);
+    const station = stations[i];
 
-    const stationLon = Number.parseFloat(stationDetail.geometry.coordinates[0], 10);
-    const stationLat = Number.parseFloat(stationDetail.geometry.coordinates[1], 10);
+    if (!station) {
+      break;
+    }
+
+    const stationLon = Number.parseFloat(station.geometry.coordinates[0], 10);
+    const stationLat = Number.parseFloat(station.geometry.coordinates[1], 10);
 
     const distanceInDegrees = calculateDistanceInDegrees(
       lat,
@@ -101,12 +105,36 @@ export function findClosetStations(
       stationLon
     );
 
-    stationDetail.properties._meta = {
-      order: i,
-      distance: convertDistanceInDegrees(distanceInDegrees, units),
+    /**
+     * @type {import("./models.js").ObservationStationExtendedGeoJSON}
+     * 
+     * A copy of a stationDetailModel obeject with additional `properties`
+     * representing the station's relative distance from the request coordinates
+     * 
+     * @note although this is somewhat verbose, creating a copy guards against
+     * accidentally leaking inaccurate `_meta` across requests by mutating shared
+     * module-level state. Avoidance of the `...` spread operator here might be
+     * a little obsesive and delusional as to the actual performance benefits of
+     * opting for inline assignment of each proprty
+     */
+    const _station = {
+      type: station.type,
+      geometry: {
+        type: station.geometry.type,
+        coordinates: station.geometry.coordinates,
+      },
+      properties: {
+        stationIdentifier: station.properties.stationIdentifier,
+        forecast: station.properties.forecast,
+        _meta: {
+          order: i,
+          distance: convertDistanceInDegrees(distanceInDegrees, units),
+          units,
+        }
+      }
     };
 
-    result.push(stationDetail);
+    result.push(_station);
   }
 
   return {
@@ -124,156 +152,131 @@ export function hasWindObservations(forecastZoneObservations) {
   );
 }
 
-
-export async function fetchForecastZoneObservations(stations) {
-  const result = [];
-
+/**
+ * 
+ * @param {import("./models.js").ObservationStationExtendedGeoJSON} station
+ * @returns 
+ */
+async function fetchObservationsFromNOAA(station) {
   const now = new Date();
   now.setHours(now.getHours() - 1);
   const oneHourAgo = now.toISOString();
 
-  // const beginningOfHour = new Date().toISOString().slice(0, 13) + ":00:00Z";
+  const url = `${station.properties.forecast}/observations?start=${oneHourAgo}`;
+
+  const observationsResponse = await fetch(url);
+  const observationsResponseData = await observationsResponse.json();
+
+  if (observationsResponse.status < 300) {
+    return {
+      message: `Successfully fetched ${url}`,
+      status: observationsResponse.status,
+      data: observationsResponseData,
+      error: null,
+    }
+  }
+
+  return {
+    message: `There was an error fetching ${url}`,
+    status: response.status,
+    error: observationsResponseData,
+    data: null,
+  }
+}
+
+/**
+ * 
+ * @param {import("./models.js").ObservationStationExtendedGeoJSON[]} stations 
+ * @returns 
+ */
+export async function fetchForecastZoneObservations(stations) {
+  const result = [];
 
   const context = [];
+
 
   for (let station of stations) {
     const key = station.properties.forecast;
 
-    const cachedRecord = zoneObservationsCache.get(key);
+    let observations = observationsCache.get(key);
 
-    if (cachedRecord) {
-      result.push({
-        message: "Successfully retrieved cached observations!",
-        status: 200,
-        data: cachedRecord,
-        error: null,
+    const cacheControl = {
+      maxAge: SECONDS.TEN_MINUTES,
+      noStore: false,
+    };
+
+    if (observations) {
+      context.push({
+        message: `Retrieved observations for '${station.properties.stationIdentifier}' from cache`,
       });
 
-      break;
-    }
+      cacheControl.noStore = true;
 
-    const url = `${station.properties.forecast}/observations?start=${oneHourAgo}`;
+    } else {
+      const noaaResponse = await fetchObservationsFromNOAA(station);
 
-    const observationsResponse = await fetch(url);
-    const observationsResponseData = await observationsResponse.json();
+      if (noaaResponse.error) {
+        context.push(noaaResponse);
+        continue;
+      }
 
-    if (observationsResponse.status < 300) {
-
-      console.log({
-        observationResponseDataStationIDs: observationsResponseData.features.map(
-          (feature) => feature.properties.stationId,
-        ),
-        station
+      context.push({
+        message: `Fetched observations for '${station.properties.stationIdentifier}' from NOAA`
       })
 
-      const stationObservations = observationsResponseData.features.filter(
-        (feature) => feature.properties.stationId === station.properties.stationIdentifier
-      );
-
-      if (stationObservations.length === 0) {
-        context.push({
-          url,
-          message: `No observations found for station '${station.properties.stationIdentifier}'`
-        });
-        continue;
-      }
-
-      const stationWindObservations = stationObservations.some(
-        (feature) => (
-          typeof feature.properties.windSpeed.value === "number" &&
-          !Number.isNaN(feature.properties.windSpeed.value)
-        )
-      );
-
-      if (stationWindObservations.length === 0) {
-        context.push({
-          url,
-          message: `No wind observations found for station '${station.properties.stationIdentifier}'`
-        });
-        continue;
-      }
-
-      zoneObservationsCache.set(key, observationsResponse, SECONDS.ONE_MINUTE);
-
-      station.properties._observations = {
-        timestamp: stationWindObservations[0].properties.timestamp,
-        windDirection: stationWindObservations[0].properties.windDirection,
-        windSpeed: stationWindObservations[0].properties.windSpeed,
-        windGust: stationWindObservations[0].properties.windGust,
-      };
-
-      return {
-        status: 200,
-        data: station,
-        error: null,
-        context
-      }
-
-      /**
-       * Success!
-       * 
-       * `station` is a GeoJSON Point representing a NOAA observation station
-       * 
-       * `observationsResponseData` is a GeoJSON FeatureCollection from a request
-       * whose url is derived from `station.properties.forecast`.
-       * 
-       * Each `feature` represents a /stations/{stationId}/observations/{time}
-       * response.
-       * 
-       * notable `feature.properties`
-       * - `stationId` where these observations were recorded
-       * - `timestamp` when these observations were recorded
-       * - `windDirection` self-explanitory
-       * - `windSpeed` self-explanitory
-       * - `windGust` self-explanitory
-       * 
-       * `context` is an array containing metadata about the steps taken by
-       * this function and can be optionally included in the response for
-       * debugging
-       * 
-       * for each feature
-       * 
-       *   stationObservations = filter feature.properties.stationId == station.properties.stationIdentifier
-       * 
-       *   if stationObservations length is 0
-       *     context push "No observations found for station '{station.properties.stationIdentifier}'"
-       *     continue
-       * 
-       *   stationHasWindObservations = some feature.properties.windSpeed.value is number
-       * 
-       *   if not stationHasWindObservations
-       *     context push "No wind observations found for station '{station.properties.stationIdentifier}'"
-       *     continue
-       * 
-       *   cache the observationsResponse
-       * 
-       *   station.properties._observations = {
-       *     feature.properties.timestamp
-       *     feature.properties.windDirection
-       *     feature.properties.windSpeed
-       *     feature.properties.windGust
-       *   }
-       *    
-       *   return {
-       *     status   200
-       *     data     station
-       *     error    null
-       *     context  context
-       *   }
-       * 
-       */
+      observations = noaaResponse.data;
     }
 
-    context.push({
-      message: `There was an error fetching ${url}`,
-      status: response.status,
-      error: json,
-    });
+    const stationObservations = observations.features.filter(
+      (feature) => feature.properties.stationId === station.properties.stationIdentifier
+    );
+
+    if (stationObservations.length === 0) {
+      context.push({
+        url,
+        message: `No observations found for station '${station.properties.stationIdentifier}'`
+      });
+      continue;
+    }
+
+    const stationWindObservations = stationObservations.filter(
+      (feature) => (
+        typeof feature.properties.windSpeed.value === "number" &&
+        !Number.isNaN(feature.properties.windSpeed.value)
+      )
+    );
+
+    if (stationWindObservations.length === 0) {
+      context.push({
+        url,
+        message: `No wind observations found for station '${station.properties.stationIdentifier}'`
+      });
+      continue;
+    }
+
+    if (!cacheControl.noStore) {
+      observationsCache.set(key, observations, cacheControl.maxAge);
+    }
+
+    station.properties.stationName = stationWindObservations[0].properties.stationName;
+    station.properties._observations = {
+      timestamp: stationWindObservations[0].properties.timestamp,
+      windDirection: stationWindObservations[0].properties.windDirection,
+      windSpeed: stationWindObservations[0].properties.windSpeed,
+      windGust: stationWindObservations[0].properties.windGust,
+    };
+
+    return {
+      status: 200,
+      data: station,
+      error: null,
+      context
+    }
   }
 
   return {
-    something: "went wrong",
-    context
-  }
-  // return result;
+    status: 404,
+    message: "Unable to fetch observations",
+    context,
+  };
 }

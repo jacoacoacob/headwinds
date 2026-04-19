@@ -1,9 +1,14 @@
 import express from "express";
 
 import { fetchForecastZoneObservations, findClosetStations, hasWindObservations } from "./services.js";
-import { zoneObservationsCache } from "./models.js";
+import { observationsCache } from "./models.js";
+import { VALID_DISTANCE_UNITS } from "./constants.js";
 
 const forecast = express.Router();
+
+forecast.get("/observations/cache", (req, res) => {
+  res.json(Array.from(observationsCache.entries()));
+});
 
 forecast.get("/observations/:latLon", async (req, res) => {
   const [lat, lon] = req.params.latLon.split(",").map((part) => part.trim());
@@ -14,10 +19,17 @@ forecast.get("/observations/:latLon", async (req, res) => {
     limit = 5;
   }
 
+  let units;
+
+  if (VALID_DISTANCE_UNITS.includes(req.query.units)) {
+    units = req.query.units;
+  }
+
   const { error: closestStationsError, data: closestStations } = findClosetStations(
     lat,
     lon,
     limit,
+    units,
   );
 
   if (closestStationsError) {
@@ -40,11 +52,17 @@ forecast.get("/stations/:latLon", (req, res) => {
     limit = 5;
   }
 
+  let units;
+
+  if (VALID_DISTANCE_UNITS.includes(req.query.units)) {
+    units = req.query.units;
+  }
+
   const { error, data: stations } = findClosetStations(
     lat, 
     lon,
     limit,
-    req.query.units
+    units
   );
 
   if (error) {

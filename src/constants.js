@@ -5,13 +5,17 @@ export const DEGREES_DISTANCE_COEFFICIENTS = {
 };
 
 export const DISTANCE_UNITS = {
-  degrees: "deg",
+  DEGREES: "deg",
   MILES: "mi",
   KILOMETERS: "km",
 };
 
+export const VALID_DISTANCE_UNITS = Object.values(DISTANCE_UNITS);
+
 export const SECONDS = {
   ONE_MINUTE: 60,
+  FIVE_MINUTES: 60 * 5,
+  TEN_MINUTES: 60 * 10,
   FIFTEEN_MINUTES: 60 * 15,
   THIRTY_MINUTES: 60 * 30,
   ONE_HOUR: 60 * 30,

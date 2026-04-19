@@ -31,8 +31,9 @@ export function trackPosition({ watchId, error, positionHistory } = {}) {
           spd: coords.speed,
           ts: timestamp,
         },
-        ...positionHistory.value,
+        ...positionHistory.value.slice(0, 10),
       ];
+
 
       if (error.value !== null) {
         error.value = null;
@@ -64,8 +65,10 @@ export function watchable(initialValue) {
     watchers.forEach(watcher => watcher(result.value))
   }
 
-  function watch(watcher) {
-    watcher(result.value);
+  function watch(watcher, options = { lazy: false }) {
+    if (!options.lazy) {
+      watcher(result.value);
+    }
     watchers.push(watcher);
   }
 
