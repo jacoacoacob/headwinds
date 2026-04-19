@@ -116,7 +116,7 @@ function ui_updateGeolocCurrent({
     const speedMessage = round(metersPerSecondToMilesPerHour(speed));
 
     ui_yourVelocity_compassArrow.style.opacity = 1;
-    ui_yourVelocity_compassArrow.style.transform = `rorate(${heading}deg)`; 
+    ui_yourVelocity_compassArrow.style.transform = `rotate(${heading}deg)`; 
     ui_yourVelocity_compassDescription.textContent = `Moving ${headingMessage} degrees ${cardinalDirectionMessage} at ${speedMessage}mph`;
     ui_geolocCurrentSummary.textContent = `Moving ${headingMessage} degrees ${cardinalDirectionMessage} at ${speedMessage}mph`
   } else {
