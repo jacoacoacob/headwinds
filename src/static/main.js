@@ -1,4 +1,4 @@
-import { watchable, trackPosition, empty, degreesToCardinalDirections, metersPerSecondToMilesPerHour, round, kilometersPerHourToMilesPerHour } from "./lib.js";
+import { watchable, trackPosition, empty, degreesToCardinalDirections, metersPerSecondToMilesPerHour, round, kilometersPerHourToMilesPerHour, invertAngle } from "./lib.js";
 
 const ui_geolocCurrentSummary = document.getElementById("geoloc-current-summary");
 const ui_geolocCurrentClosestStations = document.getElementById("geoloc-current-closest-stations");
@@ -11,6 +11,11 @@ const ui_geolocHistory = document.getElementById("geoloc-history");
 
 const ui_observationsSummary = document.getElementById("observations-summary");
 const ui_observationsData = document.getElementById("observations-data");
+
+const ui_windVelocity_compassArrow = document.querySelector("#wind-velocity > .dashboard-compass__arrow");
+const ui_windVelocity_compassDescription = document.querySelector("#wind-velocity > .dashboard-compass__description");
+const ui_yourVelocity_compassArrow = document.querySelector("#your-velocity > .dashboard-compass__arrow");
+const ui_yourVelocity_compassDescription = document.querySelector("#your-velocity > .dashboard-compass__description");
 
 const observations = watchable({});
 const error = watchable(null);
@@ -65,9 +70,6 @@ observations.watch(ui_updateObservations);
 
 function ui_updateObservations({ status, data, error, context }) {
   if (data) {
-    
-    console.log(data);
-
     const {
       properties: {
         stationName,
@@ -82,18 +84,20 @@ function ui_updateObservations({ status, data, error, context }) {
         }
       }
     } = data;
-    const observations = data.properties._observations;
     
     let summaryMessage;
 
-    if (observations.windSpeed.value <= 0) {
+    if (windSpeed.value <= 0) {
       summaryMessage = `No wind at ${stationName}`;
     } else {
       const windSpeedMessage = round(kilometersPerHourToMilesPerHour(windSpeed.value));
       const observationTime = new Date(timestamp).toLocaleTimeString();
-      summaryMessage = `Wind was observed blowing ${windDirection.value} degrees ${degreesToCardinalDirections(windDirection.value)} at ${windSpeedMessage}mph at ${observationTime} from ${stationName}.`
+      ui_windVelocity_compassArrow.style.opacity = 1;
+      ui_windVelocity_compassArrow.style.transform = `rotate(${invertAngle(windDirection.value)}deg)`;
+      summaryMessage = `Wind was observed blowing from ${windDirection.value} degrees ${degreesToCardinalDirections(windDirection.value)} at ${windSpeedMessage}mph at ${observationTime} from ${stationName}.`
     }
-
+    
+    ui_windVelocity_compassDescription.textContent = summaryMessage;
     ui_observationsSummary.textContent = summaryMessage;
     ui_observationsData.textContent = JSON.stringify({ status, error, context, data }, null, 2);
   }
@@ -107,8 +111,17 @@ function ui_updateGeolocCurrent({
   ts: timestamp,
 } = {}) {
   if (heading && speed) {
-    ui_geolocCurrentSummary.textContent = `Moving ${heading} degrees ${degreesToCardinalDirections(heading)} at ${metersPerSecondToMilesPerHour(speed)}mph`
+    const headingMessage = round(heading);
+    const cardinalDirectionMessage = degreesToCardinalDirections(heading);
+    const speedMessage = round(metersPerSecondToMilesPerHour(speed));
+
+    ui_yourVelocity_compassArrow.style.opacity = 1;
+    ui_yourVelocity_compassArrow.style.transform = `rorate(${heading}deg)`; 
+    ui_yourVelocity_compassDescription.textContent = `Moving ${headingMessage} degrees ${cardinalDirectionMessage} at ${speedMessage}mph`;
+    ui_geolocCurrentSummary.textContent = `Moving ${headingMessage} degrees ${cardinalDirectionMessage} at ${speedMessage}mph`
   } else {
+    ui_yourVelocity_compassArrow.style.opacity = 0;
+    ui_yourVelocity_compassDescription.textContent = "No motion detected. Start moving to see more.";
     ui_geolocCurrentSummary.textContent = "No motion detected"
   }
 

@@ -118,3 +118,11 @@ export function kilometersPerHourToMilesPerHour(kmph) {
 export function round(num, places = 1) {
   return Math.round(num * (10 * places)) / (10 * places);
 }
+
+export function invertAngle(degrees) {
+  if (degrees >= 180) {
+    return degrees - 180;
+  }
+
+  return 360 - degrees;
+}

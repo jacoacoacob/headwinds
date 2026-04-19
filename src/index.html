@@ -5,12 +5,41 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>WindSpeed</title>
   <script type="module" src="/static/main.js"></script>
+  <style>
+    .dashboard-compass {
+      
+    }
+    .dashboard-compass__description {}
+    .dashboard-compass__arrow {
+      height: 48px;
+      opacity: 0;
+      transition: all 0.3s;
+    }
+  </style>
 </head>
 <body>
   <main>
+
+    <section class="dashboard">
+      <div id="wind-velocity" class="dashboard-compass">
+        <h2>Wind</h2>
+        <div class="dashboard-compass__description">...waiting for observations</div>
+        <svg class="dashboard-compass__arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
+        </svg>
+      </div>
+
+      <div id="your-velocity" class="dashboard-compass">
+        <h2>You</h2>
+        <div class="dashboard-compass__description">...waiting for location</div>
+        <svg class="dashboard-compass__arrow" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75 12 3m0 0 3.75 3.75M12 3v18" />
+        </svg>
+      </div>
+    </section>
+
     <details>
       <summary id="geoloc-current-summary">...waiting for location</summary>
-
       <div>
         <a id="geoloc-current-closest-stations" href="">
           Stations closest to
