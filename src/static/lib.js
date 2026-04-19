@@ -96,3 +96,25 @@ export function empty(domNode) {
     domNode.removeChild(domNode.lastChild);
   }
 }
+
+export function degreesToCardinalDirections(degrees) {
+  const cardinalDirections = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  
+  const sliceSize = 360 / cardinalDirections.length;
+
+  const index = Math.floor(((degrees + sliceSize / 2) % 360) / sliceSize);
+
+  return cardinalDirections[index];
+}
+
+export function metersPerSecondToMilesPerHour(mps) {
+  return mps * 2.236936;
+}
+
+export function kilometersPerHourToMilesPerHour(kmph) {
+  return kmph * 0.6213712;
+}
+
+export function round(num, places = 1) {
+  return Math.round(num * (10 * places)) / (10 * places);
+}

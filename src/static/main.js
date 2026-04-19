@@ -1,6 +1,6 @@
-import { watchable, trackPosition, empty } from "./lib.js";
+import { watchable, trackPosition, empty, degreesToCardinalDirections, metersPerSecondToMilesPerHour, round, kilometersPerHourToMilesPerHour } from "./lib.js";
 
-const ui_geolocCurrent = document.getElementById("geoloc-current");
+const ui_geolocCurrentSummary = document.getElementById("geoloc-current-summary");
 const ui_geolocCurrentClosestStations = document.getElementById("geoloc-current-closest-stations");
 const ui_geolocCurrentLat = document.getElementById("geoloc-current-lat");
 const ui_geolocCurrentLon = document.getElementById("geoloc-current-lon");
@@ -38,8 +38,6 @@ async function fetchObservations(lat, lon) {
   const response = await fetch(`/forecast/observations/${lat},${lon}?units=mi`);
   const json = await response.json();
 
-  console.log(json);
-
   observations.value = json;
 }
 
@@ -67,7 +65,36 @@ observations.watch(ui_updateObservations);
 
 function ui_updateObservations({ status, data, error, context }) {
   if (data) {
-    ui_observationsSummary.textContent = `Observations for ${data.properties.stationName}`;
+    
+    console.log(data);
+
+    const {
+      properties: {
+        stationName,
+        _meta: {
+          distance,
+          units,
+        },
+        _observations: {
+          timestamp,
+          windSpeed,
+          windDirection,
+        }
+      }
+    } = data;
+    const observations = data.properties._observations;
+    
+    let summaryMessage;
+
+    if (observations.windSpeed.value <= 0) {
+      summaryMessage = `No wind at ${stationName}`;
+    } else {
+      const windSpeedMessage = round(kilometersPerHourToMilesPerHour(windSpeed.value));
+      const observationTime = new Date(timestamp).toLocaleTimeString();
+      summaryMessage = `Wind was observed blowing ${windDirection.value} degrees ${degreesToCardinalDirections(windDirection.value)} at ${windSpeedMessage}mph at ${observationTime} from ${stationName}.`
+    }
+
+    ui_observationsSummary.textContent = summaryMessage;
     ui_observationsData.textContent = JSON.stringify({ status, error, context, data }, null, 2);
   }
 }
@@ -79,6 +106,12 @@ function ui_updateGeolocCurrent({
   spd: speed,
   ts: timestamp,
 } = {}) {
+  if (heading && speed) {
+    ui_geolocCurrentSummary.textContent = `Moving ${heading} degrees ${degreesToCardinalDirections(heading)} at ${metersPerSecondToMilesPerHour(speed)}mph`
+  } else {
+    ui_geolocCurrentSummary.textContent = "No motion detected"
+  }
+
   ui_geolocCurrentLon.textContent = longetude;
   ui_geolocCurrentLat.textContent = latitude;
   ui_geolocCurrentSpeed.textContent = speed;
